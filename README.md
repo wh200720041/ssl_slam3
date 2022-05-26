@@ -3,7 +3,7 @@
 
 ### This work provides a basic fusion framework that fuses LiDAR and IMU information to improve the stability performance of SSL_SLAM
 
-### UPDATE: If you would like to enable save map and test localization separately, you can check this repo: [SSL_SLAM2](https://github.com/wh200720041/ssl_slam2)
+If you would like to enable save map and test localization separately, you can check this repo: [SSL_SLAM2](https://github.com/wh200720041/ssl_slam2)
 
 This code is an improved implementation of paper "Lightweight 3-D Localization and Mapping for Solid-State LiDAR", accepted in IEEE Robotics and Automation Letters, 2021
 
