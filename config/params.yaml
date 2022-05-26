@@ -1,0 +1,47 @@
+%YAML:1.0
+
+common:
+    core_num: 3
+    init_frame: 10
+    nearby_frame: 6
+
+    # Transformation from body-frame (imu) to camera
+    Tbl: !!opencv-matrix
+       rows: 4
+       cols: 4
+       dt: d
+       data: [1.0, 0.0, 0.0, 0.0,
+              0.0, 1.0, 0.0, 0.0,
+              0.0, 0.0, 1.0, 0.0,
+              0.0, 0.0, 0.0, 1.0]
+
+lidar:  
+    frequency: 30 
+    min_distance: 0.2           
+    max_distance: 8.0                               
+    horizontal_angle: 70.0
+    odom_n_rpy: 1.0e-2        
+    odom_n_xyz: 1.0e-2
+    local_map_resolution: 0.05
+    local_map_size: 10.0
+    edge_n: 1.0e-2
+    surf_n: 1.0e-2
+
+    # mapping thread
+    map_resolution: 0.01
+    map_cell_width: 20.0
+    map_cell_height: 20.0
+    map_cell_depth: 20.0
+    map_cell_width_range: 4
+    map_cell_height_range: 4
+    map_cell_depth_range: 4
+
+imu:
+    # note that we follow the value unit from kalibr  link:https://github.com/ethz-asl/kalibr/wiki/IMU-Noise-Model
+    # if you use imu_utils, the result is in discrete time, you can simply set frequency to 1
+    frequency: 200
+    acc_n: 1.176e-2   # 1.176e-2m/s^2 * 1/sqrt(Hz) continuous time
+    gyr_n: 2.443e-3   # 2.443e-3rad/s * 1/sqrt(Hz) continuous time
+    acc_w: 1.0e-3   # m/s^3 * 1/sqrt(Hz) continuous time
+    gyr_w: 1.0e-4   # rad/s^2 * 1/sqrt(Hz) continuous time
+
