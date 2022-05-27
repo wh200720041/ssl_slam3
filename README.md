@@ -1,3 +1,39 @@
+<a href="#"><img src="https://img.shields.io/badge/c++-%2300599C.svg?style=flat&logo=c%2B%2B&logoColor=white"></img></a>
+  <a href="#"><img src="https://img.shields.io/github/stars/chengwei0427/ssl_slam3_modified"></img></a>
+  <a href="#"><img src="https://img.shields.io/github/forks/chengwei0427/ssl_slam3_modified"></img></a>
+  <a href="#"><img src="https://img.shields.io/github/repo-size/chengwei0427/ssl_slam3_modified"></img></a>
+  <a href="https://github.com/chengwei0427/ssl_slam3_modified/issues"><img src="https://img.shields.io/github/issues/chengwei0427/ssl_slam3_modified"></img></a>
+  <a href="https://github.com/chengwei0427/ssl_slam3_modified/graphs/contributors"><img src="https://img.shields.io/github/contributors/chengwei0427/ssl_slam3_modified?color=blue"></img></a>
+
+# SSL-SLAM3_modified
+This repository is a modified LiDAR-inertial odometry system for Spinning LiDAR. The system is developed based on the open-source odometry framework [**SSL_SLAM3**](https://github.com/wh200720041/ssl_slam3) to get the odometry information. And the feature extract moudle is implemented based on [**LIO-SAM**](https://github.com/TixiaoShan/LIO-SAM) .
+
+## Modification
+
+  - Feature extract moudle is implemented based on lio-sam, this moudle support velodyne,ouster and livox lidar;
+  - Adjust some params.
+
+## demo
+
+**Test with ouster-32(os1)**
+
+-[Bilibili video ](https://www.bilibili.com/video/BV1qA4y1Z7dp?spm_id_from=333.999.0.0)
+
+
+<div align="center">
+<img src="./img/os32.png" width="1000px">
+</div>
+
+## TODO
+
+  - [ ] [add cloud distortion correction]
+  - [ ] [add local map manage]
+  - [ ] [add loop closure]
+
+
+
+--------------=----------------------------  divide line  ----------------------------------------------
+
 # SSL_SLAM3 
 ## Lightweight 3-D Localization and Mapping for Solid-State LiDAR (Intel Realsense L515 as an example)
 
