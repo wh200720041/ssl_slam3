@@ -1,10 +1,12 @@
-// Author of SSL_SLAM3: Wang Han 
+// Author of SSL_SLAM3: Wang Han
 // Email wh200720041@gmail.com
 // Homepage https://wanghan.pro
 
 #include "odomEstimationClass.h"
+#include <pcl/io/pcd_io.h>
 
-OdomEstimationClass::OdomEstimationClass(){
+OdomEstimationClass::OdomEstimationClass()
+{
     Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
     pose_r_arr.push_back(Utils::RToso3(pose.linear()));
     pose_t_arr.push_back(pose.translation());
@@ -14,88 +16,102 @@ OdomEstimationClass::OdomEstimationClass(){
     imu_preintegrator_arr.clear();
     is_initialized = false;
 
-    edge_map = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    surf_map = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    current_edge_points = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    current_surf_points = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-
+    edge_map = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
+    surf_map = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
+    current_edge_points = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
+    current_surf_points = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
 }
 
-void OdomEstimationClass::init(std::string& file_path){
+void OdomEstimationClass::init(std::string &file_path)
+{
     common_param.loadParam(file_path);
     lidar_param.loadParam(file_path);
     imu_param.loadParam(file_path);
 
-    if(common_param.getNearbyFrame()>POSE_BUFFER) std::cerr<<"please set POSE_BUFFER = common.nearby_frame! "<<std::endl;
+    if (common_param.getNearbyFrame() > POSE_BUFFER)
+        std::cerr << "please set POSE_BUFFER = common.nearby_frame! " << std::endl;
     double map_resolution = lidar_param.getLocalMapResolution();
-    //downsampling size
+    // downsampling size
     edge_downsize_filter.setLeafSize(map_resolution, map_resolution, map_resolution);
     surf_downsize_filter.setLeafSize(map_resolution * 2, map_resolution * 2, map_resolution * 2);
 }
 
-void OdomEstimationClass::initMapWithPoints(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr edge_in, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr surf_in){
+void OdomEstimationClass::initMapWithPoints(const pcl::PointCloud<PointType>::Ptr edge_in, const pcl::PointCloud<PointType>::Ptr surf_in)
+{
     *edge_map += *edge_in;
     *surf_map += *surf_in;
     edge_kd_tree.setInputCloud(edge_map);
     surf_kd_tree.setInputCloud(surf_map);
 }
 
-bool OdomEstimationClass::initialize(void){
-    if(pose_r_arr.size()<common_param.getInitFrame())
+bool OdomEstimationClass::initialize(void)
+{
+    if (pose_r_arr.size() < common_param.getInitFrame())
         return is_initialized;
     const int start_id = pose_r_arr.size() - common_param.getInitFrame();
     const int end_id = pose_r_arr.size() - 1;
 
-    Eigen::Vector3d acc_mean(0.0,0.0,0.0);
-    Eigen::Vector3d gyr_mean(0.0,0.0,0.0);
-    int acc_count =0;
+    Eigen::Vector3d acc_mean(0.0, 0.0, 0.0);
+    Eigen::Vector3d gyr_mean(0.0, 0.0, 0.0);
+    int acc_count = 0;
 
     // mean and std of IMU acc
-    for(int i=start_id; i<end_id; i++){
-        int discarded_imu =0;
+    for (int i = start_id; i < end_id; i++)
+    {
+        int discarded_imu = 0;
         std::vector<Eigen::Vector3d> acc_buf = imu_preintegrator_arr[i].getAcc();
         std::vector<Eigen::Vector3d> gyr_buf = imu_preintegrator_arr[i].getGyr();
 
-        for (int j = 0; j < acc_buf.size(); j++){
-            acc_mean+=acc_buf[j];
-            gyr_mean+=gyr_buf[j];
+        for (int j = 0; j < acc_buf.size(); j++)
+        {
+            acc_mean += acc_buf[j];
+            gyr_mean += gyr_buf[j];
             acc_count++;
         }
     }
     acc_mean = acc_mean / acc_count;
     gyr_mean = gyr_mean / acc_count;
 
-    for(int i=start_id; i<end_id;i++){
-        imu_preintegrator_arr[i].update(Eigen::Vector3d::Zero(),gyr_mean);
+    for (int i = start_id; i < end_id; i++)
+    {
+        imu_preintegrator_arr[i].update(Eigen::Vector3d::Zero(), gyr_mean);
         lidar_odom_arr[i] = Eigen::Isometry3d::Identity();
     }
 
-    if(fabs(Utils::gravity.norm() - acc_mean.norm())>0.02)
+    if (fabs(Utils::gravity.norm() - acc_mean.norm()) > 0.05)
+    {
         ROS_WARN("the gravity is wrong! measured gravity = %f", acc_mean.norm());
+        ROS_WARN("the acc_mean = %f, the gravity = %f", acc_mean.norm(), Utils::gravity.norm());
+    }
     else
         Utils::gravity = acc_mean;
 
-    ROS_INFO("gravity= %f = %f,%f,%f",Utils::gravity.norm(), Utils::gravity.x(),Utils::gravity.y(),Utils::gravity.z());
-    ROS_INFO("gyr bias %f, %f, %f",gyr_mean.x(),gyr_mean.y(),gyr_mean.z());
-   
+    ROS_INFO("gravity= %f = %f,%f,%f", Utils::gravity.norm(), Utils::gravity.x(), Utils::gravity.y(), Utils::gravity.z());
+    ROS_INFO("gyr bias %f, %f, %f", gyr_mean.x(), gyr_mean.y(), gyr_mean.z());
+
     is_initialized = true;
     return is_initialized;
 }
 
-void OdomEstimationClass::addImuPreintegration(std::vector<double> dt_arr, std::vector<Eigen::Vector3d> acc_arr, std::vector<Eigen::Vector3d> gyr_arr){
-    ImuPreintegrationClass imu_preintegrator(pose_b_a_arr.back(),pose_b_g_arr.back(), imu_param.getAccN(), imu_param.getGyrN(), imu_param.getAccW(), imu_param.getGyrW());
-    for (int i = 0; i < dt_arr.size(); ++i){
+void OdomEstimationClass::addImuPreintegration(std::vector<double> dt_arr, std::vector<Eigen::Vector3d> acc_arr, std::vector<Eigen::Vector3d> gyr_arr)
+{
+    ImuPreintegrationClass imu_preintegrator(pose_b_a_arr.back(), pose_b_g_arr.back(), imu_param.getAccN(), imu_param.getGyrN(), imu_param.getAccW(), imu_param.getGyrW());
+    for (int i = 0; i < dt_arr.size(); ++i)
+    {
         imu_preintegrator.addImuData(dt_arr[i], acc_arr[i], gyr_arr[i]);
     }
     imu_preintegrator_arr.push_back(imu_preintegrator);
 
-    //add pose states
+    // add pose states
     Eigen::Matrix3d last_R = Utils::so3ToR(pose_r_arr.back());
-    if(is_initialized == true){
+    if (is_initialized == true)
+    {
         pose_r_arr.push_back(Utils::RToso3(last_R * imu_preintegrator.delta_R));
         pose_t_arr.push_back(pose_t_arr.back() - 0.5 * Utils::gravity * imu_preintegrator.sum_dt * imu_preintegrator.sum_dt + pose_v_arr.back() * imu_preintegrator.sum_dt + last_R * imu_preintegrator.delta_p);
         pose_v_arr.push_back(pose_v_arr.back() - Utils::gravity * imu_preintegrator.sum_dt + last_R * imu_preintegrator.delta_v);
-    }else{
+    }
+    else
+    {
         pose_r_arr.push_back(Eigen::Vector3d::Zero());
         pose_t_arr.push_back(Eigen::Vector3d::Zero());
         pose_v_arr.push_back(pose_v_arr.back());
@@ -109,37 +125,40 @@ void OdomEstimationClass::addImuPreintegration(std::vector<double> dt_arr, std::
     lidar_odom_arr.push_back(Eigen::Isometry3d::Identity());
 }
 
-void OdomEstimationClass::addLidarFeature(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr edge_in, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr surf_in){
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsized_edge = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsized_surf = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+void OdomEstimationClass::addLidarFeature(const pcl::PointCloud<PointType>::Ptr edge_in, const pcl::PointCloud<PointType>::Ptr surf_in)
+{
+    pcl::PointCloud<PointType>::Ptr downsized_edge = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
+    pcl::PointCloud<PointType>::Ptr downsized_surf = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
 
     edge_downsize_filter.setInputCloud(edge_in);
     edge_downsize_filter.filter(*downsized_edge);
     surf_downsize_filter.setInputCloud(surf_in);
-    surf_downsize_filter.filter(*downsized_surf); 
+    surf_downsize_filter.filter(*downsized_surf);
 
     Eigen::Isometry3f T_bl = common_param.getTbl().cast<float>();
-    pcl::transformPointCloud(*downsized_edge, *current_edge_points, T_bl);   
-    pcl::transformPointCloud(*downsized_surf, *current_surf_points, T_bl);    
-
+    pcl::transformPointCloud(*downsized_edge, *current_edge_points, T_bl);
+    pcl::transformPointCloud(*downsized_surf, *current_surf_points, T_bl);
 }
 
-void OdomEstimationClass::addEdgeCost(ceres::Problem& problem, ceres::LossFunction *loss_function, double* pose){
-    int edge_num=0;
+void OdomEstimationClass::addEdgeCost(ceres::Problem &problem, ceres::LossFunction *loss_function, double *pose)
+{
+    int edge_num = 0;
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-    T_wb.linear() = Utils::so3ToR(Eigen::Vector3d(pose[0],pose[1],pose[2]));
-    T_wb.translation() = Eigen::Vector3d(pose[3],pose[4],pose[5]);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_edge = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+    T_wb.linear() = Utils::so3ToR(Eigen::Vector3d(pose[0], pose[1], pose[2]));
+    T_wb.translation() = Eigen::Vector3d(pose[3], pose[4], pose[5]);
+    pcl::PointCloud<PointType>::Ptr transformed_edge = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
     pcl::transformPointCloud(*current_edge_points, *transformed_edge, T_wb.cast<float>());
-    for (int i = 0; i < (int)transformed_edge->points.size(); i++){
+    for (int i = 0; i < (int)transformed_edge->points.size(); i++)
+    {
         std::vector<int> pointSearchInd;
         std::vector<float> pointSearchSqDis;
-        edge_kd_tree.nearestKSearch(transformed_edge->points[i], 5, pointSearchInd, pointSearchSqDis); 
+        edge_kd_tree.nearestKSearch(transformed_edge->points[i], 5, pointSearchInd, pointSearchSqDis);
         if (pointSearchSqDis[4] < 1.0)
         {
             std::vector<Eigen::Vector3d> nearCorners;
             Eigen::Vector3d center(0, 0, 0);
-            for (int j = 0; j < 5; j++){
+            for (int j = 0; j < 5; j++)
+            {
                 Eigen::Vector3d tmp(edge_map->points[pointSearchInd[j]].x,
                                     edge_map->points[pointSearchInd[j]].y,
                                     edge_map->points[pointSearchInd[j]].z);
@@ -149,7 +168,8 @@ void OdomEstimationClass::addEdgeCost(ceres::Problem& problem, ceres::LossFuncti
             center = center / 5.0;
 
             Eigen::Matrix3d covMat = Eigen::Matrix3d::Zero();
-            for (int j = 0; j < 5; j++){
+            for (int j = 0; j < 5; j++)
+            {
                 Eigen::Matrix<double, 3, 1> tmpZeroMean = nearCorners[j] - center;
                 covMat = covMat + tmpZeroMean * tmpZeroMean.transpose();
             }
@@ -158,40 +178,46 @@ void OdomEstimationClass::addEdgeCost(ceres::Problem& problem, ceres::LossFuncti
 
             Eigen::Vector3d unit_direction = saes.eigenvectors().col(2);
             Eigen::Vector3d curr_point(current_edge_points->points[i].x, current_edge_points->points[i].y, current_edge_points->points[i].z);
-            if (saes.eigenvalues()[2] > 3 * saes.eigenvalues()[1]){ 
+            if (saes.eigenvalues()[2] > 3 * saes.eigenvalues()[1])
+            {
                 Eigen::Vector3d point_on_line = center;
                 Eigen::Vector3d point_a, point_b;
                 point_a = 0.1 * unit_direction + point_on_line;
                 point_b = -0.1 * unit_direction + point_on_line;
 
-                ceres::CostFunction *cost_function = new LidarEdgeFactor(curr_point, point_a, point_b, lidar_param.getEdgeN());  
+                ceres::CostFunction *cost_function = new LidarEdgeFactor(curr_point, point_a, point_b, lidar_param.getEdgeN());
                 problem.AddResidualBlock(cost_function, loss_function, pose);
-                edge_num++;   
-            }                           
+                edge_num++;
+            }
         }
     }
-    if(edge_num<20){
-        std::cout<<"not enough correct edge points"<<std::endl;
+    if (edge_num < 20)
+    {
+        std::cout << "not enough correct edge points" << std::endl;
     }
 }
 
-void OdomEstimationClass::addSurfCost(ceres::Problem& problem, ceres::LossFunction *loss_function, double* pose){
-    int surf_num=0;
+void OdomEstimationClass::addSurfCost(ceres::Problem &problem, ceres::LossFunction *loss_function, double *pose)
+{
+    int surf_num = 0;
     Eigen::Isometry3d T_wb = Eigen::Isometry3d::Identity();
-    T_wb.linear() = Utils::so3ToR(Eigen::Vector3d(pose[0],pose[1],pose[2]));
-    T_wb.translation() = Eigen::Vector3d(pose[3],pose[4],pose[5]);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_surf = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+    T_wb.linear() = Utils::so3ToR(Eigen::Vector3d(pose[0], pose[1], pose[2]));
+    T_wb.translation() = Eigen::Vector3d(pose[3], pose[4], pose[5]);
+    pcl::PointCloud<PointType>::Ptr transformed_surf = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
     pcl::transformPointCloud(*current_surf_points, *transformed_surf, T_wb.cast<float>());
-    
-    for (int i = 0; i < (int) transformed_surf->points.size(); i++){
+
+    for (int i = 0; i < (int)transformed_surf->points.size(); i++)
+    {
         std::vector<int> pointSearchInd;
         std::vector<float> pointSearchSqDis;
         surf_kd_tree.nearestKSearch(transformed_surf->points[i], 5, pointSearchInd, pointSearchSqDis);
 
         Eigen::Matrix<double, 5, 3> matA0;
         Eigen::Matrix<double, 5, 1> matB0 = -1 * Eigen::Matrix<double, 5, 1>::Ones();
-        if (pointSearchSqDis[4] < 1.0){
-            for (int j = 0; j < 5; j++){
+        if (pointSearchSqDis[4] < 1.0)
+        {
+            for (int j = 0; j < 5; j++)
+            {
                 matA0(j, 0) = surf_map->points[pointSearchInd[j]].x;
                 matA0(j, 1) = surf_map->points[pointSearchInd[j]].y;
                 matA0(j, 2) = surf_map->points[pointSearchInd[j]].z;
@@ -216,38 +242,42 @@ void OdomEstimationClass::addSurfCost(ceres::Problem& problem, ceres::LossFuncti
             Eigen::Vector3d curr_point(current_surf_points->points[i].x, current_surf_points->points[i].y, current_surf_points->points[i].z);
             if (planeValid)
             {
-                ceres::CostFunction *cost_function = new LidarSurfFactor(curr_point, norm, negative_OA_dot_norm, lidar_param.getSurfN());    
+                ceres::CostFunction *cost_function = new LidarSurfFactor(curr_point, norm, negative_OA_dot_norm, lidar_param.getSurfN());
                 problem.AddResidualBlock(cost_function, loss_function, pose);
                 surf_num++;
             }
         }
-
     }
-    if(surf_num<20){
-        std::cout<<"not enough correct surf points"<<std::endl;
+    if (surf_num < 20)
+    {
+        std::cout << "not enough correct surf points" << std::endl;
     }
 }
 
-void OdomEstimationClass::addImuCost(ImuPreintegrationClass& imu_integrator, ceres::Problem& problem, ceres::LossFunction *loss_function, double* pose1, double* pose2){
-    ImuPreintegrationFactor* imu_factor = new ImuPreintegrationFactor(imu_integrator);
+void OdomEstimationClass::addImuCost(ImuPreintegrationClass &imu_integrator, ceres::Problem &problem, ceres::LossFunction *loss_function, double *pose1, double *pose2)
+{
+    ImuPreintegrationFactor *imu_factor = new ImuPreintegrationFactor(imu_integrator);
     problem.AddResidualBlock(imu_factor, loss_function, pose1, pose2);
 }
 
-void OdomEstimationClass::addOdometryCost(const Eigen::Isometry3d& odom, ceres::Problem& problem, ceres::LossFunction *loss_function, double* pose1, double* pose2){
-    LidarOdometryFactor* odom_factor = new LidarOdometryFactor(odom, lidar_param.getOdomN());
+void OdomEstimationClass::addOdometryCost(const Eigen::Isometry3d &odom, ceres::Problem &problem, ceres::LossFunction *loss_function, double *pose1, double *pose2)
+{
+    LidarOdometryFactor *odom_factor = new LidarOdometryFactor(odom, lidar_param.getOdomN());
     problem.AddResidualBlock(odom_factor, loss_function, pose1, pose2);
 }
 
-void OdomEstimationClass::optimize(void){
-    if(imu_preintegrator_arr.size()!= lidar_odom_arr.size() || lidar_odom_arr.size() != pose_r_arr.size()-1)
+void OdomEstimationClass::optimize(void)
+{
+    if (imu_preintegrator_arr.size() != lidar_odom_arr.size() || lidar_odom_arr.size() != pose_r_arr.size() - 1)
         ROS_WARN("pose num and imu num are not properly aligned");
 
-    const int pose_size = pose_r_arr.size()>common_param.getNearbyFrame()?common_param.getNearbyFrame():pose_r_arr.size();
+    const int pose_size = pose_r_arr.size() > common_param.getNearbyFrame() ? common_param.getNearbyFrame() : pose_r_arr.size();
     const int start_id = pose_r_arr.size() - pose_size;
     const int end_id = pose_r_arr.size() - 1;
 
     double pose[POSE_BUFFER][15];
-    for(int i = start_id; i <= end_id; i++){
+    for (int i = start_id; i <= end_id; i++)
+    {
         const int pose_id = i - start_id;
         pose[pose_id][0] = pose_r_arr[i].x();
         pose[pose_id][1] = pose_r_arr[i].y();
@@ -266,34 +296,48 @@ void OdomEstimationClass::optimize(void){
         pose[pose_id][14] = pose_b_g_arr[i].z();
     }
 
-    for (int iterCount = 0; iterCount < 3; iterCount++){
+    for (int iterCount = 0; iterCount < 3; iterCount++)
+    {
         ceres::LossFunction *loss_function = new ceres::HuberLoss(0.5);
         ceres::Problem::Options problem_options;
         ceres::Problem problem(problem_options);
 
-        for(int i = start_id; i <= end_id; i++){
+        for (int i = start_id; i <= end_id; i++)
+        {
             const int pose_id = i - start_id;
-            if(pose_id == 0)
-                problem.AddParameterBlock(pose[pose_id], 15, new ConstantPoseParameterization()); 
+            if (pose_id == 0)
+                problem.AddParameterBlock(pose[pose_id], 15, new ConstantPoseParameterization());
             else
-                problem.AddParameterBlock(pose[pose_id], 15, new PoseParameterization()); 
+                problem.AddParameterBlock(pose[pose_id], 15, new PoseParameterization());
         }
 
-        //add imu cost factor
-        for (int i = start_id; i < end_id; i++){
+        Timer tk("t");
+        tk.tic();
+        // add imu cost factor
+        for (int i = start_id; i < end_id; i++)
+        {
             const int pose_id = i - start_id;
-            addImuCost(imu_preintegrator_arr[i], problem, loss_function, pose[pose_id], pose[pose_id+1]);
+            addImuCost(imu_preintegrator_arr[i], problem, loss_function, pose[pose_id], pose[pose_id + 1]);
         }
+        std::cout << "add imu takes: " << tk.toc() << std::endl;
 
-        addEdgeCost(problem, loss_function, pose[pose_size-1]);
-        addSurfCost(problem, loss_function, pose[pose_size-1]);
+        tk.tic();
+        addEdgeCost(problem, loss_function, pose[pose_size - 1]);
+        std::cout << "add edge takes: " << tk.toc() << std::endl;
+        tk.tic();
+        addSurfCost(problem, loss_function, pose[pose_size - 1]);
+        std::cout << "add surf takes: " << tk.toc() << std::endl;
 
+        tk.tic();
         // add odometry cost factor
-        for (int i = start_id; i < end_id - 1; i++){
+        for (int i = start_id; i < end_id - 1; i++)
+        {
             const int pose_id = i - start_id;
-            addOdometryCost(lidar_odom_arr[i], problem, loss_function, pose[pose_id], pose[pose_id+1]);
+            addOdometryCost(lidar_odom_arr[i], problem, loss_function, pose[pose_id], pose[pose_id + 1]);
         }
+        std::cout << "add odom takes: " << tk.toc() << std::endl;
 
+        tk.tic();
         ceres::Solver::Options options;
         options.linear_solver_type = ceres::DENSE_QR;
         options.max_num_iterations = 6;
@@ -302,9 +346,11 @@ void OdomEstimationClass::optimize(void){
         options.num_threads = common_param.getCoreNum();
         ceres::Solver::Summary summary;
         ceres::Solve(options, &problem, &summary);
-    }  
+        std::cout << "solve takes: " << tk.toc() << std::endl;
+    }
 
-    for(int i = start_id; i<= end_id; i++){
+    for (int i = start_id; i <= end_id; i++)
+    {
         const int pose_id = i - start_id;
         pose_r_arr[i].x() = pose[pose_id][0];
         pose_r_arr[i].y() = pose[pose_id][1];
@@ -322,59 +368,92 @@ void OdomEstimationClass::optimize(void){
         pose_b_g_arr[i].y() = pose[pose_id][13];
         pose_b_g_arr[i].z() = pose[pose_id][14];
     }
-    
-    for(int i = start_id; i < end_id; i++){
+
+    Timer tk("tt");
+    tk.tic();
+    for (int i = start_id; i < end_id; i++)
+    {
         imu_preintegrator_arr[i].update(pose_b_a_arr[i], pose_b_g_arr[i]);
     }
-    
-    // update odom
-    for(int i = end_id - 1; i < end_id; i++){
-        Eigen::Matrix3d last_R = Utils::so3ToR(pose_r_arr[i]);
-        lidar_odom_arr[i].linear() = last_R.transpose() * Utils::so3ToR(pose_r_arr[i+1]);
-        lidar_odom_arr[i].translation() = last_R.transpose() * (pose_t_arr[i+1] - pose_t_arr[i]);
-    }
+    std::cout << "imu repreintegrate takes: " << tk.toc() << std::endl;
 
-    // update map 
+    tk.tic();
+    // update odom
+    for (int i = end_id - 1; i < end_id; i++)
+    {
+        Eigen::Matrix3d last_R = Utils::so3ToR(pose_r_arr[i]);
+        lidar_odom_arr[i].linear() = last_R.transpose() * Utils::so3ToR(pose_r_arr[i + 1]);
+        lidar_odom_arr[i].translation() = last_R.transpose() * (pose_t_arr[i + 1] - pose_t_arr[i]);
+    }
+    std::cout << "update odom takes: " << tk.toc() << std::endl;
+
+    // update map
     Eigen::Isometry3d current_pose = Eigen::Isometry3d::Identity();
     current_pose.linear() = Utils::so3ToR(pose_r_arr.back());
     current_pose.translation() = pose_t_arr.back();
+    tk.tic();
     updateLocalMap(current_pose);
+    std::cout << "update local map takes: " << tk.toc() << std::endl;
 }
 
-void OdomEstimationClass::updateLocalMap(Eigen::Isometry3d& transform){
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_edge = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+void OdomEstimationClass::updateLocalMap(Eigen::Isometry3d &transform)
+{
+    pcl::PointCloud<PointType>::Ptr transformed_edge = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
     pcl::transformPointCloud(*current_edge_points, *transformed_edge, transform.cast<float>());
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_surf = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
+    pcl::PointCloud<PointType>::Ptr transformed_surf = pcl::PointCloud<PointType>::Ptr(new pcl::PointCloud<PointType>());
     pcl::transformPointCloud(*current_surf_points, *transformed_surf, transform.cast<float>());
-    
+
+    deque_edge.push_back(transformed_edge);
+    deque_surf.push_back(transformed_surf);
+    while (deque_edge.size() > 10)
+    {
+        deque_edge.pop_front();
+        deque_surf.pop_front();
+    }
+    edge_map->clear();
+    surf_map->clear();
+    for (int i = 0; i < deque_edge.size(); ++i)
+    {
+        *edge_map += *deque_edge[i];
+        *surf_map += *deque_surf[i];
+    }
+
     *edge_map += *transformed_edge;
     *surf_map += *transformed_surf;
 
-    double x_min = transform.translation().x() - lidar_param.getLocalMapSize();
-    double y_min = transform.translation().y() - lidar_param.getLocalMapSize();
-    double z_min = transform.translation().z() - lidar_param.getLocalMapSize();
-    double x_max = transform.translation().x() + lidar_param.getLocalMapSize();
-    double y_max = transform.translation().y() + lidar_param.getLocalMapSize();
-    double z_max = transform.translation().z() + lidar_param.getLocalMapSize();
-    
-    pcl::CropBox<pcl::PointXYZRGB> crop_box_filter;
-    crop_box_filter.setMin(Eigen::Vector4f(x_min, y_min, z_min, 1.0));
-    crop_box_filter.setMax(Eigen::Vector4f(x_max, y_max, z_max, 1.0));
-    crop_box_filter.setNegative(false);    
+    std::cout << "T:\n"
+              << transform.matrix() << std::endl;
+    /* pcl::io::savePCDFileBinary("ssl_slam3.pcd", *surf_map);
+     std::cout << "edge size: " << edge_map->size() << ", surf size: " << surf_map->size() << std::endl;
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr edge_map_temp(new pcl::PointCloud<pcl::PointXYZRGB>());
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr surf_map_temp(new pcl::PointCloud<pcl::PointXYZRGB>());
-    crop_box_filter.setInputCloud(edge_map);
-    crop_box_filter.filter(*edge_map_temp);
-    crop_box_filter.setInputCloud(surf_map);
-    crop_box_filter.filter(*surf_map_temp);
+     double x_min = transform.translation().x() - lidar_param.getLocalMapSize();
+     double y_min = transform.translation().y() - lidar_param.getLocalMapSize();
+     double z_min = transform.translation().z() - lidar_param.getLocalMapSize();
+     double x_max = transform.translation().x() + lidar_param.getLocalMapSize();
+     double y_max = transform.translation().y() + lidar_param.getLocalMapSize();
+     double z_max = transform.translation().z() + lidar_param.getLocalMapSize();
 
-    edge_downsize_filter.setInputCloud(edge_map_temp);
-    edge_downsize_filter.filter(*edge_map);    
-    surf_downsize_filter.setInputCloud(surf_map_temp);
+     pcl::CropBox<PointType> crop_box_filter;
+     crop_box_filter.setMin(Eigen::Vector4f(x_min, y_min, z_min, 1.0));
+     crop_box_filter.setMax(Eigen::Vector4f(x_max, y_max, z_max, 1.0));
+     crop_box_filter.setNegative(false);
+     std::cout << "crop xyz: " << x_min << "-->" << x_max << ", " << y_min << "-->" << y_max << ", " << z_min << "--> " << z_max << std::endl;
+
+     pcl::PointCloud<PointType>::Ptr edge_map_temp(new pcl::PointCloud<PointType>());
+     pcl::PointCloud<PointType>::Ptr surf_map_temp(new pcl::PointCloud<PointType>());
+     crop_box_filter.setInputCloud(edge_map);
+     crop_box_filter.filter(*edge_map_temp);
+     crop_box_filter.setInputCloud(surf_map);
+     crop_box_filter.filter(*surf_map_temp);
+     pcl::io::savePCDFileBinary("ssl_slam3_filter.pcd", *surf_map_temp);
+     std::cout << "after filter,edge size: " << edge_map_temp->size() << ", surf size: " << surf_map_temp->size() << std::endl;*/
+
+    std::cout << "bef filter, edge " << edge_map->size() << ", surf " << surf_map->size() << std::endl;
+    edge_downsize_filter.setInputCloud(edge_map);
+    edge_downsize_filter.filter(*edge_map);
+    surf_downsize_filter.setInputCloud(surf_map);
     surf_downsize_filter.filter(*surf_map);
 
     edge_kd_tree.setInputCloud(edge_map);
     surf_kd_tree.setInputCloud(surf_map);
-
 }
