@@ -32,7 +32,8 @@
 #include "poseOptimizationFactor.h"
 #include "timer.h"
 
-typedef pcl::PointXYZI PointType;
+// typedef pcl::PointXYZI PointType;
+typedef pcl::PointXYZINormal PointType;
 
 #define POSE_BUFFER 10
 

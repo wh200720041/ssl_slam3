@@ -28,7 +28,8 @@
 // local lib
 #include "param.h"
 
-typedef pcl::PointXYZI PointType;
+// typedef pcl::PointXYZI PointType;
+typedef pcl::PointXYZINormal PointType;
 
 class LaserMappingClass
 {

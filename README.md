@@ -11,6 +11,7 @@ This repository is a modified LiDAR-inertial odometry system for Spinning LiDAR.
 ## Modification
 
   - Feature extract moudle is implemented based on lio-sam, this moudle support velodyne,ouster and livox lidar;
+  - Add remove lidar distortion 
   - Adjust some params.
 
 ## demo
@@ -26,9 +27,10 @@ This repository is a modified LiDAR-inertial odometry system for Spinning LiDAR.
 
 ## TODO
 
-  - [ ] [add cloud distortion correction]
+  - [x] [add cloud distortion correction]
   - [ ] [add local map manage]
   - [ ] [add loop closure]
+  - [ ] [lidar-imu initialize]
 
 
 

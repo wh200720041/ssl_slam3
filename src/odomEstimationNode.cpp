@@ -62,6 +62,39 @@ void surfCloudHandler(const sensor_msgs::PointCloud2ConstPtr &lidar_msg)
     con.notify_one();
 }
 
+void removeLidarDistortion(pcl::PointCloud<PointType>::Ptr edge, pcl::PointCloud<PointType>::Ptr surf, const Eigen::Matrix3d &R, const Eigen::Vector3d &t)
+{
+    int edge_num = edge->size();
+    for (int i = 0; i < edge_num; i++)
+    {
+        Eigen::Vector3d startP;
+        float s = edge->points[i].normal_x;
+        Eigen::Quaterniond qlc = Eigen::Quaterniond(R).normalized();
+        Eigen::Quaterniond delta_q = Eigen::Quaterniond::Identity().slerp(s, qlc).normalized();
+        const Eigen::Vector3d delta_t = s * t;
+        startP = delta_q * Eigen::Vector3d(edge->points[i].x, edge->points[i].y, edge->points[i].z) + delta_t;
+        edge->points[i].x = startP(0);
+        edge->points[i].y = startP(1);
+        edge->points[i].z = startP(2);
+        edge->points[i].normal_x = 1.0;
+    }
+
+    int surf_num = surf->size();
+    for (int i = 0; i < surf_num; i++)
+    {
+        Eigen::Vector3d startP;
+        float s = surf->points[i].normal_x;
+        Eigen::Quaterniond qlc = Eigen::Quaterniond(R).normalized();
+        Eigen::Quaterniond delta_q = Eigen::Quaterniond::Identity().slerp(s, qlc).normalized();
+        const Eigen::Vector3d delta_t = s * t;
+        startP = delta_q * Eigen::Vector3d(surf->points[i].x, surf->points[i].y, surf->points[i].z) + delta_t;
+        surf->points[i].x = startP(0);
+        surf->points[i].y = startP(1);
+        surf->points[i].z = startP(2);
+        surf->points[i].normal_x = 1.0;
+    }
+}
+
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vector<sensor_msgs::PointCloud2ConstPtr>>> message_syn_buf;
 std::mutex message_lock;
 // note that there may be multiple odoms if processing speed is slow
@@ -197,6 +230,16 @@ void odom_estimation()
         pcl::fromROSMsg(*(message_syn_buf[0].second[1]), *surf_points_in);
 
         odom_estimator.addImuPreintegration(dt_arr, acc_arr, gyr_arr);
+        {
+            //  FIXME:  add lidar distortion here
+            static Timer t_d("distort");
+            t_d.tic();
+            Eigen::Matrix3d last_R = Utils::so3ToR(odom_estimator.pose_r_arr[odom_estimator.pose_r_arr.size() - 2]);
+            Eigen::Matrix3d delta_R = last_R.transpose() * Utils::so3ToR(odom_estimator.pose_r_arr.back());
+            Eigen::Vector3d delta_t = last_R.transpose() * (odom_estimator.pose_t_arr.back() - odom_estimator.pose_t_arr[odom_estimator.pose_t_arr.size() - 2]);
+            removeLidarDistortion(edge_points_in, surf_points_in, delta_R, delta_t);
+            std::cout << "distort a scan takes : " << t_d.toc() << "ms" << std::endl;
+        }
         odom_estimator.addLidarFeature(edge_points_in, surf_points_in);
         message_syn_buf.erase(message_syn_buf.begin());
 
