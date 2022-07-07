@@ -45,6 +45,8 @@ catkin_package(
   DEPENDS EIGEN3 PCL Ceres 
   INCLUDE_DIRS include
 )
+add_executable(${PROJECT_NAME}_featureExtract src/featureExtract.cpp)
+target_link_libraries(${PROJECT_NAME}_featureExtract ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
 
 add_executable(ssl_slam3_laser_processing_node src/laserProcessingNode.cpp src/laserProcessingClass.cpp src/param.cpp src/utils.cpp)
 target_link_libraries(ssl_slam3_laser_processing_node ${EIGEN3_LIBRARIES} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_LIBRARIES} ${OpenCV_LIBS})
